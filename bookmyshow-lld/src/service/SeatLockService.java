@@ -15,25 +15,14 @@ public class SeatLockService {
         this.lockedSeats = new HashMap<String, String>();
     }
 
-    public boolean areSeatsAvailable(Show show, List<Seat> seats) {
-        validate(show, seats, null);
+    public boolean lockSeats(Show show, List<Seat> seats, User user) {
         for (int i = 0; i < seats.size(); i++) {
             Seat seat = seats.get(i);
-            if (seat.getStatus() == SeatStatus.BOOKED) {
-                return false;
-            }
-            if (lockedSeats.get(getLockKey(show, seat)) != null) {
+            if (seat.getStatus() == SeatStatus.BOOKED || lockedSeats.containsKey(getLockKey(show, seat))) {
                 return false;
             }
         }
-        return true;
-    }
 
-    public boolean lockSeats(Show show, List<Seat> seats, User user) {
-        validate(show, seats, user);
-        if (!areSeatsAvailable(show, seats)) {
-            return false;
-        }
         for (int i = 0; i < seats.size(); i++) {
             Seat seat = seats.get(i);
             lockedSeats.put(getLockKey(show, seat), user.getId());
@@ -41,45 +30,13 @@ public class SeatLockService {
         return true;
     }
 
-    public void unlockSeats(Show show, List<Seat> seats, User user) {
-        validate(show, seats, user);
+    public void unlockSeats(Show show, List<Seat> seats) {
         for (int i = 0; i < seats.size(); i++) {
-            Seat seat = seats.get(i);
-            String key = getLockKey(show, seat);
-            String lockedBy = lockedSeats.get(key);
-            if (user.getId().equals(lockedBy)) {
-                lockedSeats.remove(key);
-            }
-        }
-    }
-
-    public void confirmSeats(Show show, List<Seat> seats, User user) {
-        validate(show, seats, user);
-        for (int i = 0; i < seats.size(); i++) {
-            Seat seat = seats.get(i);
-            String key = getLockKey(show, seat);
-            String lockedBy = lockedSeats.get(key);
-            if (!user.getId().equals(lockedBy)) {
-                throw new IllegalStateException("Seat is not locked by this user: " + seat.getSeatNumber());
-            }
-            seat.setStatus(SeatStatus.BOOKED);
-            lockedSeats.remove(key);
+            lockedSeats.remove(getLockKey(show, seats.get(i)));
         }
     }
 
     private String getLockKey(Show show, Seat seat) {
         return show.getId() + "_" + seat.getId();
-    }
-
-    private void validate(Show show, List<Seat> seats, User user) {
-        if (show == null) {
-            throw new IllegalArgumentException("Show is required");
-        }
-        if (seats == null || seats.size() == 0) {
-            throw new IllegalArgumentException("At least one seat is required");
-        }
-        if (user != null && (user.getId() == null || user.getId().length() == 0)) {
-            throw new IllegalArgumentException("User id is required");
-        }
     }
 }

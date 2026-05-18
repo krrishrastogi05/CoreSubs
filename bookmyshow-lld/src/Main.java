@@ -10,7 +10,6 @@ import model.Seat;
 import model.Show;
 import model.Theatre;
 import model.User;
-import payment.PaymentStrategyFactory;
 import service.BookingService;
 import service.CatalogService;
 import service.PaymentService;
@@ -20,17 +19,14 @@ public class Main {
     public static void main(String[] args) {
         CatalogService catalogService = new CatalogService();
         SeatLockService seatLockService = new SeatLockService();
-        PaymentService paymentService = new PaymentService(new PaymentStrategyFactory());
+        PaymentService paymentService = new PaymentService();
         BookingService bookingService = new BookingService(
                 catalogService, seatLockService, paymentService);
 
         User user = new User("user1", "Aman", "aman@example.com");
 
         City bengaluru = new City("city1", "Bengaluru");
-        catalogService.addCity(bengaluru);
-
         Theatre theatre = new Theatre("theatre1", "PVR Orion", bengaluru);
-        catalogService.addTheatre(theatre);
 
         Screen screen = new Screen("screen1", "Audi 1");
         screen.addSeat(new Seat("seat1", "A1"));
@@ -40,8 +36,6 @@ public class Main {
         theatre.addScreen(screen);
 
         Movie movie = new Movie("movie1", "Interstellar", 169);
-        catalogService.addMovie(movie);
-
         Show show = new Show("show1", movie, theatre, screen, "18 May 2026 07:30 PM", 250.0);
         catalogService.addShow(show);
 
@@ -68,7 +62,7 @@ public class Main {
 
         System.out.println();
         System.out.println("Cancellation flow");
-        Booking cancelledBooking = bookingService.cancelBooking(confirmedBooking.getId(), user);
+        Booking cancelledBooking = bookingService.cancelBooking(confirmedBooking.getId());
         printBooking(cancelledBooking);
 
         System.out.println();

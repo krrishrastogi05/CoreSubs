@@ -1,69 +1,45 @@
-# BookMyShow LLD in Java: 1-Hour Interview Version
+# BookMyShow LLD: Minimal 1-Hour Interview Version
 
-This is a simplified BookMyShow Low Level Design project for SDE-1 interviews.
+This project is intentionally small. It is not production BookMyShow. It is a version you can realistically code in an SDE-1 LLD interview.
 
-The goal is not to build production BookMyShow. The goal is to practice a repeatable UML-to-code pattern that you can write under interview pressure.
+## Coding Order To Remember
 
-## The Repeatable LLD Coding Pattern
+Use this same order for other LLD questions:
 
-Use this order for most LLD problems:
+1. Enums
+2. Models
+3. Request class
+4. Interface
+5. Implementations
+6. Factory
+7. Services
+8. Main demo
 
-1. Write enums
-2. Write simple model classes
-3. Write request/input classes
-4. Write interfaces for variable behavior
-5. Write implementations
-6. Write factory if object creation varies
-7. Write service classes
-8. Write a small main/demo flow
+## What This Project Supports
 
-This project follows the same order.
+- Create city, theatre, screen, seats, movie, show objects.
+- Search shows by city and movie.
+- Book seats.
+- Lock seats before payment.
+- Pay using UPI or card.
+- Confirm booking on payment success.
+- Fail booking and unlock seats on payment failure.
+- Cancel confirmed booking.
 
-## Problem Statement
-
-Design a simple movie ticket booking system where:
-
-- Admin can add city, theatre, screen, seats, movie, and show.
-- User can search shows by city and movie.
-- User can book seats for a show.
-- Selected seats are temporarily locked before payment.
-- Payment can happen through UPI or card.
-- On successful payment, booking is confirmed and seats are booked.
-- On failed payment, booking fails and seats are unlocked.
-- User can cancel a confirmed booking.
-- All data is stored in memory.
-
-## Interview Scope
-
-This version is intentionally small.
-
-Implemented:
-
-- In-memory catalog
-- Search shows
-- Seat locking
-- Booking creation
-- Payment Strategy + Factory
-- Booking cancellation
-- Simple demo in `Main.java`
-
-Skipped:
+## What Is Skipped
 
 - Spring Boot
 - Database
 - Repository layer
-- Authentication
 - Real payment gateway
 - Refunds
-- Kafka
-- Redis
-- Distributed locks
-- Advanced concurrency code
-- Microservices
+- Login/auth
+- Redis/distributed locks
+- Heavy validation
 
-In a real system, these would matter. In a 1-hour SDE-1 LLD interview, they distract from the core flow.
+The goal is core LLD flow, not production completeness.
 
-## Folder Structure
+## Simple Folder Structure
 
 ```text
 src/
@@ -74,28 +50,20 @@ src/
   service/
 ```
 
-This structure is repeatable:
+## Minimal Services
 
-- `enums`: fixed states and types
-- `model`: data classes
-- `payment`: strategy, implementations, factory
-- `service`: business logic
-- `Main.java`: demo flow
+Only four services:
 
-## Final Service Set
-
-Only four services are used:
-
-- `CatalogService`: stores and searches city, theatre, movie, and show data
-- `SeatLockService`: temporarily locks seats before payment
-- `PaymentService`: runs payment using strategy/factory
+- `CatalogService`: stores shows and searches shows
+- `SeatLockService`: locks/unlocks seats temporarily
+- `PaymentService`: uses payment strategy
 - `BookingService`: main booking and cancellation flow
 
-Earlier, this design could have separate `MovieService`, `TheatreService`, `ShowService`, and `NotificationService`. For interview coding, that creates too many moving pieces. `CatalogService` intentionally combines catalog operations so you can finish in time.
+`CatalogService` does not separately store cities, theatres, and movies. For this interview version, `Show` already has `Movie`, `Theatre`, `Screen`, and `City` through its object references.
 
-## Core Classes
+## Core Model Idea
 
-Models:
+Easy entities:
 
 - `User`
 - `City`
@@ -104,30 +72,22 @@ Models:
 - `Seat`
 - `Movie`
 - `Show`
+
+Connecting/transaction entity:
+
 - `Booking`
-- `BookingRequest`
-- `PaymentRequest`
 
-Enums:
+Rule to remember:
 
-- `SeatStatus`
-- `BookingStatus`
-- `PaymentStatus`
-- `PaymentMode`
+```text
+If the system creates a real-world record, make it a class.
+```
 
-Payment:
+For BookMyShow:
 
-- `PaymentStrategy`
-- `UpiPaymentStrategy`
-- `CardPaymentStrategy`
-- `PaymentStrategyFactory`
-
-Services:
-
-- `CatalogService`
-- `SeatLockService`
-- `PaymentService`
-- `BookingService`
+```text
+Booking = User + Show + Seats + Amount + Status
+```
 
 ## Class Diagram
 
@@ -139,17 +99,11 @@ classDiagram
         -PaymentService paymentService
         -Map bookings
         +createBooking(BookingRequest)
-        +cancelBooking(String, User)
+        +cancelBooking(String)
     }
 
     class CatalogService {
-        -Map cities
-        -Map theatres
-        -Map movies
         -Map shows
-        +addCity(City)
-        +addTheatre(Theatre)
-        +addMovie(Movie)
         +addShow(Show)
         +getShow(String)
         +searchShows(String, String)
@@ -157,135 +111,69 @@ classDiagram
 
     class SeatLockService {
         -Map lockedSeats
-        +areSeatsAvailable(Show, List)
         +lockSeats(Show, List, User)
-        +unlockSeats(Show, List, User)
-        +confirmSeats(Show, List, User)
+        +unlockSeats(Show, List)
     }
 
     class PaymentService {
         -PaymentStrategyFactory paymentStrategyFactory
-        +makePayment(PaymentRequest)
+        +makePayment(PaymentMode, double, boolean)
     }
 
     class PaymentStrategy {
         <<interface>>
-        +pay(PaymentRequest)
+        +pay(double, boolean)
     }
 
     class UpiPaymentStrategy
     class CardPaymentStrategy
-    class PaymentStrategyFactory {
-        +getPaymentStrategy(PaymentMode)
-    }
-
-    class Booking
-    class BookingRequest
-    class User
-    class Show
-    class Seat
-    class Movie
-    class Theatre
-    class Screen
-    class City
+    class PaymentStrategyFactory
 
     BookingService --> CatalogService
     BookingService --> SeatLockService
     BookingService --> PaymentService
-    BookingService --> Booking
-    BookingService --> BookingRequest
     PaymentService --> PaymentStrategyFactory
     PaymentStrategyFactory --> PaymentStrategy
     PaymentStrategy <|.. UpiPaymentStrategy
     PaymentStrategy <|.. CardPaymentStrategy
-    Booking --> User
-    Booking --> Show
-    Booking --> Seat
-    BookingRequest --> User
-    Show --> Movie
-    Show --> Theatre
-    Show --> Screen
-    Theatre --> City
-    Theatre --> Screen
-    Screen --> Seat
-```
-
-## UML to Java Mapping
-
-| UML item | Java code |
-|---|---|
-| Class | `class User` |
-| Interface | `interface PaymentStrategy` |
-| Enum | `enum BookingStatus` |
-| A uses B | `private B b;` |
-| A has many B | `List<B>` |
-| Service stores data | `Map<String, Object>` |
-| Interface implementation | `implements PaymentStrategy` |
-
-Example:
-
-```text
-BookingService --> PaymentService
-```
-
-becomes:
-
-```java
-private PaymentService paymentService;
 ```
 
 ## Booking Flow
 
-`BookingService.createBooking(BookingRequest request)` is the most important method.
+`BookingService.createBooking()` is the most important method.
 
-It follows this interview-friendly service order:
+Flow:
 
-1. Validate input
-2. Fetch required object
-3. Check business rule
-4. Call another service
-5. Update entity state
-6. Save/update in memory
-7. Return result
+1. Get user and show.
+2. Convert seat ids to seat objects.
+3. Try to lock seats.
+4. Calculate amount.
+5. Create booking.
+6. Make payment.
+7. If payment succeeds:
+   - mark booking confirmed
+   - mark seats booked
+   - unlock seats
+8. If payment fails:
+   - mark booking failed
+   - unlock seats
+9. Save booking in map.
+10. Return booking.
 
-Actual flow:
+## Seat Locking
 
-1. Validate `BookingRequest`.
-2. Fetch `Show` from `CatalogService`.
-3. Convert seat ids into `Seat` objects.
-4. Check if seats are available.
-5. Lock seats using `SeatLockService`.
-6. Calculate amount.
-7. Create `Booking` with `CREATED` status.
-8. Create `PaymentRequest`.
-9. Call `PaymentService`.
-10. If payment succeeds:
-    - mark booking `CONFIRMED`
-    - mark seats `BOOKED`
-    - remove locks
-11. If payment fails:
-    - mark booking `FAILED`
-    - unlock seats
-12. Store booking in map.
-13. Return booking.
+`SeatLockService` is now very small.
 
-## Why SeatLockService Matters
+It keeps:
 
-Seat locking is the main BookMyShow LLD concept.
+```java
+Map<String, String> lockedSeats;
+```
 
-Without locking:
-
-- User A selects seat A1.
-- User B selects seat A1.
-- Both try to pay.
-- Same seat can be double-booked.
-
-This project keeps a simple map:
+Key:
 
 ```text
-Map<String, String> lockedSeats
-key = showId + "_" + seatId
-value = userId
+showId_seatId
 ```
 
 Example:
@@ -294,27 +182,20 @@ Example:
 show1_seat1 -> user1
 ```
 
-For production, this would need DB transactions, Redis locks, expiry time, and distributed locking. For an SDE-1 interview, the in-memory map is enough to show the idea.
+For an interview, this is enough. In production, you would discuss Redis/DB locks later.
 
-## Why Payment Uses Strategy + Factory
+## Payment Pattern
 
-Payment mode can vary:
+Payment uses Strategy + Factory:
 
-- UPI
-- Card
+- `PaymentStrategy`
+- `UpiPaymentStrategy`
+- `CardPaymentStrategy`
+- `PaymentStrategyFactory`
 
-So we use:
+This is enough to show that different payment modes can have different implementations.
 
-- `PaymentStrategy`: common interface
-- `UpiPaymentStrategy`: UPI payment
-- `CardPaymentStrategy`: card payment
-- `PaymentStrategyFactory`: returns the right strategy
-
-This keeps `PaymentService` small and easy to explain.
-
-## How to Run
-
-From PowerShell:
+## How To Run
 
 ```powershell
 cd C:\Users\BIT\Documents\Super_Coding\LLD\bookmyshow-lld
@@ -360,57 +241,25 @@ Amount: 250.0
 Seats: A1
 ```
 
-## Interview Explanation Script
+## Interview Script
 
 Say this:
 
-> I will code the core flow instead of the entire production system. I will first define enums, then simple models, then request classes, then payment strategy and factory, then services, and finally a main demo.
+> I will code the core flow, not the production system. I will create simple models, a Booking transaction class, payment strategy/factory, a small seat lock service, and BookingService as the main orchestrator.
 
-Then explain the design:
+Then:
 
-> I kept four services. CatalogService stores city, theatre, movie, and show data in memory. SeatLockService handles temporary seat locking. PaymentService handles payment using Strategy and Factory. BookingService is the main orchestrator.
+> The key class is Booking because it connects User, Show, Seats, Amount, and Status.
 
-Then explain booking:
+Then:
 
-> In createBooking, I validate the request, fetch the show, get selected seats, check availability, lock seats, calculate amount, create payment request, call payment service, and then either confirm the booking and mark seats booked or fail the booking and unlock seats.
-
-Then explain tradeoff:
-
-> In production, catalog operations may be split into MovieService, TheatreService, and ShowService. For a 1-hour SDE-1 interview, I am keeping them together in CatalogService to reduce unnecessary code and focus on the core booking flow.
-
-## Possible Follow-up Questions
-
-**Q: Why not separate MovieService, TheatreService, and ShowService?**
-
-A: We can in production. For interview coding, one `CatalogService` is easier and still clean because all those operations are simple catalog operations.
-
-**Q: Why is BookingService the most important service?**
-
-A: It coordinates the real business flow: validation, show lookup, seat locking, payment, booking state update, seat state update, and storage.
-
-**Q: Why do we need BookingRequest?**
-
-A: It keeps `createBooking()` clean. Instead of passing many parameters, we pass one request object.
-
-**Q: Why not mark seats booked before payment?**
-
-A: Payment may fail. Locking is temporary; booking is permanent only after payment success.
-
-**Q: How would this change in production?**
-
-A: Add DB tables, transactions, lock expiry, distributed locking, real payment gateway, refund flow, authentication, and monitoring.
+> The key service is BookingService because it locks seats, calls payment, confirms or fails the booking, and updates seat state.
 
 ## Best Reading Order
 
-1. `src/enums`
-2. `src/model`
-3. `src/model/BookingRequest.java`
-4. `src/payment/PaymentStrategy.java`
-5. `src/payment/PaymentStrategyFactory.java`
-6. `src/service/CatalogService.java`
-7. `src/service/SeatLockService.java`
-8. `src/service/PaymentService.java`
-9. `src/service/BookingService.java`
-10. `src/Main.java`
-
-If you are short on time, read only `BookingRequest`, `SeatLockService`, `PaymentService`, `BookingService`, and `Main`.
+1. `BookingRequest`
+2. `Booking`
+3. `SeatLockService`
+4. `PaymentService`
+5. `BookingService`
+6. `Main`

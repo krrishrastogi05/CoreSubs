@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import model.Booking;
 import model.BookingRequest;
-import model.PaymentRequest;
 import model.Seat;
 import model.Show;
 import model.User;
@@ -31,8 +30,6 @@ public class BookingService {
     }
 
     public Booking createBooking(BookingRequest request) {
-        validateCreateBookingInput(request);
-
         User user = request.getUser();
         Show show = catalogService.getShow(request.getShowId());
         if (show == null) {
@@ -40,56 +37,37 @@ public class BookingService {
         }
 
         List<Seat> selectedSeats = getSelectedSeats(show, request.getSeatIds());
-        if (!seatLockService.areSeatsAvailable(show, selectedSeats)) {
-            throw new IllegalStateException("Selected seats are not available");
+        if (!seatLockService.lockSeats(show, selectedSeats, user)) {
+            throw new IllegalStateException("Seats are not available");
         }
 
-        boolean locked = seatLockService.lockSeats(show, selectedSeats, user);
-        if (!locked) {
-            throw new IllegalStateException("Could not lock selected seats");
-        }
-
-        double amount = calculateAmount(show, selectedSeats);
+        double amount = show.getPricePerSeat() * selectedSeats.size();
         String bookingId = "booking" + bookingCounter;
         bookingCounter++;
 
         Booking booking = new Booking(bookingId, user, show, selectedSeats, amount);
-        PaymentRequest paymentRequest = new PaymentRequest(
-                bookingId, user.getId(), amount, request.getPaymentMode(), request.isForcePaymentSuccess());
-
-        PaymentStatus paymentStatus = paymentService.makePayment(paymentRequest);
+        PaymentStatus paymentStatus = paymentService.makePayment(
+                request.getPaymentMode(), amount, request.isForcePaymentSuccess());
         booking.setPaymentStatus(paymentStatus);
 
         if (paymentStatus == PaymentStatus.SUCCESS) {
             booking.setBookingStatus(BookingStatus.CONFIRMED);
-            seatLockService.confirmSeats(show, selectedSeats, user);
+            markSeatsBooked(selectedSeats);
+            seatLockService.unlockSeats(show, selectedSeats);
             System.out.println("Booking confirmed: " + booking.getId());
         } else {
             booking.setBookingStatus(BookingStatus.FAILED);
-            seatLockService.unlockSeats(show, selectedSeats, user);
+            seatLockService.unlockSeats(show, selectedSeats);
         }
 
         bookings.put(booking.getId(), booking);
         return booking;
     }
 
-    public Booking cancelBooking(String bookingId, User user) {
-        if (bookingId == null || bookingId.length() == 0) {
-            throw new IllegalArgumentException("Booking id is required");
-        }
-        if (user == null || user.getId() == null || user.getId().length() == 0) {
-            throw new IllegalArgumentException("User is required");
-        }
-
+    public Booking cancelBooking(String bookingId) {
         Booking booking = bookings.get(bookingId);
-        if (booking == null) {
-            throw new IllegalArgumentException("Booking not found");
-        }
-        if (!booking.getUser().getId().equals(user.getId())) {
-            throw new IllegalStateException("Only booking owner can cancel booking");
-        }
-        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
-            throw new IllegalStateException("Only confirmed booking can be cancelled");
+        if (booking == null || booking.getBookingStatus() != BookingStatus.CONFIRMED) {
+            throw new IllegalStateException("Booking cannot be cancelled");
         }
 
         List<Seat> seats = booking.getSeats();
@@ -102,29 +80,9 @@ public class BookingService {
         return booking;
     }
 
-    public Booking getBooking(String bookingId) {
-        if (bookingId == null || bookingId.length() == 0) {
-            throw new IllegalArgumentException("Booking id is required");
-        }
-        return bookings.get(bookingId);
-    }
-
-    private void validateCreateBookingInput(BookingRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("Booking request is required");
-        }
-        User user = request.getUser();
-        if (user == null || user.getId() == null || user.getId().length() == 0) {
-            throw new IllegalArgumentException("User is required");
-        }
-        if (request.getShowId() == null || request.getShowId().length() == 0) {
-            throw new IllegalArgumentException("Show id is required");
-        }
-        if (request.getSeatIds() == null || request.getSeatIds().size() == 0) {
-            throw new IllegalArgumentException("At least one seat id is required");
-        }
-        if (request.getPaymentMode() == null) {
-            throw new IllegalArgumentException("Payment mode is required");
+    private void markSeatsBooked(List<Seat> seats) {
+        for (int i = 0; i < seats.size(); i++) {
+            seats.get(i).setStatus(SeatStatus.BOOKED);
         }
     }
 
@@ -140,7 +98,4 @@ public class BookingService {
         return selectedSeats;
     }
 
-    private double calculateAmount(Show show, List<Seat> seats) {
-        return show.getPricePerSeat() * seats.size();
-    }
 }
