@@ -1,0 +1,301 @@
+
+
+#include<bits/stdc++.h>
+
+using namespace std;
+using Cents = long long;
+using Clock = chrono::steady_clock;
+
+struct Airline {int id;
+  string name;
+};
+
+struct Airport {
+    
+int id;
+    string name;
+};
+
+struct Seat {
+    int id;
+   
+string label;
+};
+
+struct Aircraft {
+    int id;
+   
+int airportId;
+   
+vector<Seat> seats;
+};
+
+enum class SeatState { Available, Held, PaymentPending, Booked };
+enum class BookingState { Held, PaymentPending, Confirmed, Failed };
+
+struct FlightSeat {
+    Seat seat;
+    SeatState state = SeatState::Available;
+    string heldBy;
+    Clock::time_point heldUntil;
+};
+
+struct Flight {
+    int id;
+    int airlineId;
+    int airportId;
+    int aircraftId;
+    string startTime;
+    unordered_map<int, FlightSeat> seats;
+};
+
+struct Booking {
+    int id;
+    string userId;
+    int flightId;
+    vector<int> seatIds;
+    BookingState state = BookingState::Held;
+};
+
+struct FlightSummary {
+    int flightId;
+    int airportId;
+    int aircraftId;
+    string startTime;
+};
+
+class PaymentGateway {
+public:
+    bool pay(const string& userId, Cents amount) {
+        cout << "Payment requested for " << userId << " : " << amount << "\n";
+        return true;
+    }
+};
+
+
+
+
+class BookingService{
+    private:
+        unordered_map<int, Airline> airlines;
+        unordered_map<int, Airport> airports;
+        unordered_map<int, Flight> flights;
+        unordered_map<int, Aircraft> aircrafts;
+
+        //booking id se booking niklegi
+        unordered_map<int, Booking> bookings;
+        int nextFlightId=1;
+        int nextBookingId = 1;
+        PaymentGateway* pay;
+
+        mutex mtx;
+public:
+        BookingService(PaymentGateway*pay){
+            this->pay = pay;
+        }
+//movie ka instance khud se create karo aur yahan bas show me laga do 
+        void addAirline(const Airline&airline){
+            airlines[airline.id] = airline;
+        }
+        void addAirport(const Airport&airport){
+            airports[airport.id] = airport;
+        }
+
+        void addAircraft(const Aircraft&aircraft){
+            aircrafts[aircraft.id] = aircraft;
+
+        }
+
+
+        int createFlight(int airlineId,int airportId,int aircraftId, const string&startTime){
+
+               //the things should be valid
+               if(!airlines.count(airlineId) || !airports.count(airportId) || !aircrafts.count(aircraftId))
+                   return -1;
+               if(aircrafts.find(aircraftId)==aircrafts.end())
+                   return -1;
+
+               auto aircraft1 = aircrafts[aircraftId];
+               //now find the associated theatreIddoe
+
+               
+
+                if(aircraft1.airportId!=airportId)
+                    return -1;
+
+                    Flight flight{nextFlightId++, airlineId, airportId, aircraftId, startTime, {}};
+        for (const auto& seat : aircraft1.seats)
+            flight.seats[seat.id] = {seat};
+
+        flights[flight.id] = flight;
+        return flight.id;
+
+                    //now validation is done lets create a show
+                     
+
+                // a show is affiliated to a theatre as well as to the screens
+
+
+        
+
+
+        }
+
+        vector<FlightSummary> getFlights(int airlineId){
+            //given a movieId, find all affiliated shows with that movieId
+            vector<FlightSummary> ans;
+            for(auto &x:flights){
+                if(x.second.airlineId==airlineId)
+                    ans.push_back({x.second.id,
+                                   x.second.airportId,
+                                   x.second.aircraftId,
+                                   x.second.startTime});
+            }
+        }
+
+        int createBooking(int flightId,const string&userId,const vector<int>&seatIds){
+//take the lock first
+//then validate that the showId is correct or not
+// then validate whether the seats exist in the show
+//then check whether the seats are duplicate or not
+//then check whether the seats are in the state ::Held or not 
+//check whether seats heldUntil<=now
+
+            lock_guard<mutex> lock(mtx);
+            //we are protecting shared seat state
+
+            auto flightIt = flights.find(flightId);
+            if(flightIt==flights.end())
+                return -1;
+            //put the seatIDs in a transitive state
+            auto &flight = flightIt->second;
+
+            if(seatIds.empty())
+                return -1;
+ set<int> st;
+            for(auto &x:seatIds){
+                if(flight.seats.find(x)==flight.seats.end())
+                    return -1;
+                if(!st.empty() && st.find(x)!=st.end())
+                    return -1;
+
+                st.insert(x);
+
+
+            }
+auto now = Clock::now();
+            for(auto &x:seatIds){
+                
+                auto &seat = flight.seats[x];
+                if(seat.state==SeatState::Held && seat.heldUntil<=now){
+                    seat.state = SeatState::Available;
+                    seat.heldBy.clear();
+                }
+            }
+
+            for(auto &x:seatIds){
+                auto &seat = flight.seats[x];
+                if(seat.state!=SeatState::Available)
+                    return -1;
+            }
+
+            //now all seats are available verified and everything lets make a booking
+            auto expiry = now + chrono::minutes(5);
+
+
+            for(auto &x:seatIds){
+                auto &seat = flight.seats[x];
+                seat.heldBy = userId;
+                seat.heldUntil = expiry;
+                seat.state = SeatState::Held;
+
+            }
+            int bookingId = nextBookingId++;
+            bookings[bookingId] = Booking{bookingId, userId, flightId, seatIds, BookingState::Held};
+
+            return bookingId;
+        }
+
+        bool payAndConfirm(int bookingId,Cents amount){
+            string userId;
+
+            {
+                lock_guard<mutex> lock(mtx);
+
+                auto bookingIt = bookings.find(bookingId);
+                if(bookingIt==bookings.end())
+                    return false;
+
+                auto &booking = bookingIt->second;
+                if(booking.state==BookingState::Held)
+                    return false;
+
+                auto flightIt = flights.find(booking.flightId);
+
+                if(flightIt==flights.end()){
+                    return false;
+                }
+
+                auto now = Clock::now();
+
+                //make sure all seats are still held by this booking
+
+                for (int seatId:booking.seatIds){
+                    auto &seat = flight.seats[seatId];
+
+                    if(seat.state!=SeatState::Held || seat.heldBy!=booking.userId || now>=seat.heldUntil){
+                        booking.state = BookingState::Failed;
+                        return false;
+                    }
+
+                }
+
+                for(int seatId:booking.seatIds){
+                    flight.seats[seatId].state = SeatState::PaymentPending;
+                }
+                booking.state = BookingState::PaymentPending;
+                userId = booking.userId;
+            }
+
+
+        }
+
+        bool paid = payment->pay(userId, amount);
+
+        {
+        lock_guard<mutex> lock(mtx);
+
+        auto& booking = bookings[bookingId];
+        auto& flight = flights[booking.flightId];
+
+        // Payment failed → release the seats.
+        if (!paid) {
+
+            for (int seatId : booking.seatIds) {
+
+                auto& seat = flight.seats[seatId];
+
+             seat.state = SeatState::Available;
+            seat.heldBy.clear();
+            }
+
+     booking.state = BookingState::Failed;
+
+            return false;
+        }
+
+
+        // Payment succeeded → permanently book the seats.
+        for (int seatId : booking.seatIds) {
+
+            auto& seat = flight.seats[seatId];
+
+            seat.state = SeatState::Booked;
+            seat.heldBy.clear();
+        }
+
+        booking.state = BookingState::Confirmed;
+
+        return true;
+    }
+};
